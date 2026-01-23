@@ -1,6 +1,7 @@
 import pandas as pd
 import os
 from datetime import timedelta
+from datetime import datetime, timedelta # Actualiza tu importación
 
 def formatear_duracion(tiempo):
     """Convierte entradas a formato HH:MM:SS y retorna un objeto timedelta"""
@@ -30,7 +31,9 @@ def td_a_string(td):
 def ejecutar_todo():
     archivo_excel_origen = 'SESIONES_PINCHADAS.xlsx' 
     archivo_csv_db = 'playlist.csv'
-    archivo_excel_final = 'mi_playlist_seleccionada.xlsx'
+    # --- CAMBIO AQUÍ: Generar nombre con fecha y hora ---
+    ahora = datetime.now().strftime("%y%m%d_%H%M%S")
+    archivo_excel_final = f"sesión_{ahora}.xlsx"
 
     if not os.path.exists(archivo_excel_origen):
         print(f"❌ Error: No se encuentra '{archivo_excel_origen}'")
@@ -132,11 +135,16 @@ def ejecutar_todo():
 
     # --- GUARDAR ---
     if seleccionados:
-        pd.concat(seleccionados, ignore_index=True).to_excel(archivo_excel_final, index=False)
+        df_final = pd.concat(seleccionados, ignore_index=True)
+        df_final.to_excel(archivo_excel_final, index=False)
+        
+        # Opcional: Actualizar la base de datos CSV global
         db.to_csv(archivo_csv_db, index=False, encoding='utf-8-sig')
-        print(f"\n🎉 Sesión guardada en {archivo_excel_final}. Total: {td_a_string(tiempo_total)}")
+        
+        print(f"\n🎉 Sesión guardada como: {archivo_excel_final}")
+        print(f"⏱️ Total de la sesión: {td_a_string(tiempo_total)}")
     else:
-        print("\nCerrando sin guardar.")
+        print("\nCerrando sin guardar cambios.")
 
 if __name__ == "__main__":
     ejecutar_todo()
