@@ -2,6 +2,8 @@ import pandas as pd
 import os
 from datetime import timedelta
 
+# --- FUNCIONES DE UTILIDAD ---
+
 def formatear_duracion(tiempo):
     """Convierte entradas a formato HH:MM:SS y retorna un objeto timedelta"""
     tiempo = str(tiempo).strip()
@@ -27,71 +29,63 @@ def td_a_string(td):
     segundos = total_segundos % 60
     return f"{horas:02d}:{minutos:02d}:{segundos:02d}"
 
-def ejecutar_todo():
-    archivo_excel_origen = 'SESIONES_PINCHADAS.xlsx' 
-    archivo_csv_db = 'playlist.csv'
-    archivo_excel_final = 'mi_playlist_seleccionada.xlsx'
+# --- MÓDULOS DEL PROGRAMA ---
 
-    if not os.path.exists(archivo_excel_origen):
-        print(f"❌ Error: No se encuentra '{archivo_excel_origen}'")
-        return
+def menu_biblioteca(db):
+    """Opción 1: Añadir temas a la base de datos sin crear playlist"""
+    print("\n--- 📚 GESTIÓN DE BIBLIOTECA ---")
+    while True:
+        busqueda = input("\nArtista para añadir temas (o 'q' para volver al menú): ").strip()
+        if busqueda.lower() == 'q': break
+        
+        # Normalizamos el nombre del artista (si existe en DB, usamos el existente)
+        coincidencias = db[db['ARTISTA'].str.contains(busqueda, case=False, na=False)]['ARTISTA'].unique()
+        if len(coincidencias) > 0:
+            print("Artistas encontrados:")
+            for idx, n in enumerate(coincidencias): print(f"{idx+1}. {n}")
+            sel = input("Selecciona número (o Enter para usar nombre nuevo): ")
+            artista_final = coincidencias[int(sel)-1] if sel.isdigit() and int(sel) <= len(coincidencias) else busqueda.upper()
+        else:
+            artista_final = busqueda.upper()
 
-    try:
-        dict_pestañas = pd.read_excel(archivo_excel_origen, sheet_name=None)
-        lista_tablas = []
-        for _, df in dict_pestañas.items():
-            df.columns = df.columns.str.strip().str.upper()
-            cols = ['ARTISTA', 'TITULO', 'DURACION']
-            for c in cols:
-                if c not in df.columns: df[c] = "N/A"
-            df_limpio = df[cols].copy().dropna(subset=['ARTISTA'])
-            lista_tablas.append(df_limpio)
-        db = pd.concat(lista_tablas, ignore_index=True).drop_duplicates()
-    except Exception as e:
-        print(f"❌ Error: {e}")
-        return
+        while True:
+            print(f"\n📍 Añadiendo temas a: {artista_final}")
+            titulo = input("  Título del tema (o 'v' para cambiar de artista): ").strip().upper()
+            if titulo.lower() == 'v': break
+            
+            duracion = input("  Duración (MM:SS): ").strip()
+            td = formatear_duracion(duracion)
+            
+            nueva_fila = pd.DataFrame([{'ARTISTA': artista_final, 'TITULO': titulo, 'DURACION': td_a_string(td)}])
+            db = pd.concat([db, nueva_fila], ignore_index=True).drop_duplicates()
+            print(f"✅ Guardado: {titulo}")
+    
+    return db
 
+def menu_playlist(db):
+    """Opción 2: Crear playlist (tu lógica original mejorada)"""
+    print("\n--- 🎧 CREACIÓN DE PLAYLIST ---")
     seleccionados = []
     tiempo_total = timedelta(0)
     
-    print("\n" + "="*45)
-    print("🎵 GESTOR DE SESIONES v3 🎵")
-    print("="*45)
-
     while True:
         print(f"\n⏱️ ACUMULADO: {td_a_string(tiempo_total)}")
-        busqueda = input("Busca un ARTISTA (o 'salir'): ").strip()
-        if busqueda.lower() in ['salir', 'exit']: break
+        busqueda = input("Busca un ARTISTA (o 'q' para finalizar): ").strip()
+        if busqueda.lower() == 'q': break
         if not busqueda: continue
             
         artistas_coincidentes = db[db['ARTISTA'].str.contains(busqueda, case=False, na=False)]['ARTISTA'].unique()
 
-        # --- CASO A: EL ARTISTA NO EXISTE ---
         if len(artistas_coincidentes) == 0:
-            print(f"⚠️ El artista '{busqueda.upper()}' no está en la base de datos.")
-            if input(f"¿Quieres crearlo y añadir un tema? (s/n): ").lower() == 's':
-                # Directamente usamos la búsqueda como nombre de artista
-                artista_nuevo = busqueda.upper()
-                print(f"Artista: {artista_nuevo}")
-                nuevo_tit = input("Introduce el TITULO: ").strip().upper()
-                nueva_dur = input("Introduce DURACION (MM:SS): ").strip()
-                
-                td = formatear_duracion(nueva_dur)
-                nueva_fila = pd.DataFrame([{'ARTISTA': artista_nuevo, 'TITULO': nuevo_tit, 'DURACION': td_a_string(td)}])
-                
-                seleccionados.append(nueva_fila)
-                db = pd.concat([db, nueva_fila], ignore_index=True)
-                tiempo_total += td
-                print(f"✅ Registrado y añadido: {nuevo_tit}")
+            print(f"⚠️ El artista '{busqueda.upper()}' no existe.")
             continue
 
-        # --- CASO B: ARTISTA ENCONTRADO ---
         print("\nArtistas coincidentes:")
         for idx, nombre in enumerate(artistas_coincidentes):
             print(f"{idx + 1} - {nombre}")
 
         try:
-            sel_art = input("\nSelecciona número (o Enter para nueva búsqueda): ")
+            sel_art = input("\nSelecciona número: ")
             if not sel_art: continue
             
             artista_elegido = artistas_coincidentes[int(sel_art) - 1]
@@ -101,42 +95,62 @@ def ejecutar_todo():
             for i, fila in canciones.iterrows():
                 print(f"  {i + 1} > {fila['TITULO']} [{fila['DURACION']}]")
             
-            idx_nuevo_tema = len(canciones) + 1
-            print(f"  {idx_nuevo_tema} > [AÑADIR NUEVO TEMA PARA {artista_elegido}]")
-
             sel_tem = input(f"\nElige un tema (Enter para volver): ")
             if not sel_tem: continue
             
-            opcion_idx = int(sel_tem) - 1
-
-            if opcion_idx == len(canciones):
-                # Añadir tema a artista existente
-                nuevo_tit = input(f"Nuevo TÍTULO para {artista_elegido}: ").strip().upper()
-                nueva_dur = input("DURACIÓN (MM:SS): ").strip()
-                td = formatear_duracion(nueva_dur)
-                
-                nueva_fila = pd.DataFrame([{'ARTISTA': artista_elegido, 'TITULO': nuevo_tit, 'DURACION': td_a_string(td)}])
-                seleccionados.append(nueva_fila)
-                db = pd.concat([db, nueva_fila], ignore_index=True)
-                tiempo_total += td
-                print(f"✅ Añadido: {nuevo_tit}")
-            elif 0 <= opcion_idx < len(canciones):
-                # Seleccionar tema existente
-                fila_sel = canciones.iloc[[opcion_idx]].copy()
+            idx = int(sel_tem) - 1
+            if 0 <= idx < len(canciones):
+                fila_sel = canciones.iloc[[idx]].copy()
                 dur_td = formatear_duracion(fila_sel.iloc[0]['DURACION'])
                 seleccionados.append(fila_sel)
                 tiempo_total += dur_td
-                print(f"✅ Añadido: {fila_sel.iloc[0]['TITULO']}")
+                print(f"✅ Añadido a playlist: {fila_sel.iloc[0]['TITULO']}")
         except:
             print("❌ Selección no válida.")
+            
+    return seleccionados, tiempo_total
 
-    # --- GUARDAR ---
-    if seleccionados:
-        pd.concat(seleccionados, ignore_index=True).to_excel(archivo_excel_final, index=False)
-        db.to_csv(archivo_csv_db, index=False, encoding='utf-8-sig')
-        print(f"\n🎉 Sesión guardada en {archivo_excel_final}. Total: {td_a_string(tiempo_total)}")
+# --- FLUJO PRINCIPAL ---
+
+def ejecutar():
+    archivo_csv_db = 'playlist.csv' # Usamos el CSV como base de datos permanente
+    archivo_excel_final = 'mi_playlist_seleccionada.xlsx'
+
+    # Cargar base de datos existente o crear una vacía
+    if os.path.exists(archivo_csv_db):
+        db = pd.read_csv(archivo_csv_db)
     else:
-        print("\nCerrando sin guardar.")
+        db = pd.DataFrame(columns=['ARTISTA', 'TITULO', 'DURACION'])
+
+    while True:
+        print("\n" + "="*30)
+        print("   GESTOR DE MÚSICA v4")
+        print("="*30)
+        print("1. Gestionar Biblioteca (Añadir temas)")
+        print("2. Crear nueva Playlist")
+        print("3. Salir")
+        
+        opcion = input("\nElige una opción: ").strip()
+
+        if opcion == '1':
+            db = menu_biblioteca(db)
+            db.to_csv(archivo_csv_db, index=False, encoding='utf-8-sig')
+            print("\n💾 Biblioteca actualizada.")
+            
+        elif opcion == '2':
+            if db.empty:
+                print("⚠️ La biblioteca está vacía. Añade temas primero.")
+                continue
+            lista_playlist, tiempo = menu_playlist(db)
+            if lista_playlist:
+                pd.concat(lista_playlist, ignore_index=True).to_excel(archivo_excel_final, index=False)
+                print(f"\n🎉 Playlist guardada. Total: {td_a_string(tiempo)}")
+        
+        elif opcion == '3':
+            print("¡Hasta luego!")
+            break
+        else:
+            print("Opción no válida.")
 
 if __name__ == "__main__":
-    ejecutar_todo()
+    ejecutar()
